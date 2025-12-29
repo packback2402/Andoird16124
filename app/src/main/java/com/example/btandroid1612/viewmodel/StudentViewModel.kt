@@ -1,53 +1,59 @@
 package com.example.btandroid1612.viewmodel
 
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.*
+import com.example.btandroid1612.data.AppDatabase
 import com.example.btandroid1612.model.Student
 
-class StudentViewModel : ViewModel() {
+class StudentViewModel(application: Application) : AndroidViewModel(application) {
 
-    val students = MutableLiveData(mutableListOf<Student>())
+    private val dao = AppDatabase
+        .getInstance(application)
+        .studentDao()
+
+    private val _students = MutableLiveData<List<Student>>()
+    val students: LiveData<List<Student>> = _students
 
     init {
-        students.value = mutableListOf(
-            Student("SV001", "Nguyễn Văn A", "0123456789", "Hà Nội"),
-            Student("SV002", "Trần Thị B", "0987654321", "Đà Nẵng"),
-            Student("SV003", "Lê Văn C", "0911222333", "TP.HCM")
-        )
+        loadStudents()
+    }
+
+    private fun loadStudents() {
+        _students.value = dao.getAll()
     }
 
     fun addStudent(student: Student): Boolean {
-        val list = students.value ?: mutableListOf()
-        if (list.any { it.mssv == student.mssv }) return false
-        list.add(student)
-        students.value = list
-        return true
+        return try {
+            dao.insert(student)
+            loadStudents()
+            true
+        } catch (e: Exception) {
+            false // MSSV trùng
+        }
     }
 
-    fun getStudentByMssv(mssv: String): Student? =
-        students.value?.firstOrNull { it.mssv == mssv }
-
+    fun getStudentByMssv(mssv: String): Student? {
+        return dao.getByMssv(mssv)
+    }
 
     fun updateStudent(oldMssv: String, newStudent: Student): Boolean {
-        val list = students.value ?: return false
-
-        // Nếu MSSV bị đổi thì check trùng
-        if (oldMssv != newStudent.mssv &&
-            list.any { it.mssv == newStudent.mssv }) {
-            return false
+        return try {
+            if (oldMssv != newStudent.mssv) {
+                // đổi MSSV → xóa cũ, thêm mới
+                dao.deleteByMssv(oldMssv)
+                dao.insert(newStudent)
+            } else {
+                dao.update(newStudent)
+            }
+            loadStudents()
+            true
+        } catch (e: Exception) {
+            false
         }
-
-        val index = list.indexOfFirst { it.mssv == oldMssv }
-        if (index == -1) return false
-
-        list[index] = newStudent
-        students.value = list
-        return true
     }
 
     fun deleteStudent(mssv: String) {
-        students.value = students.value
-            ?.filter { it.mssv != mssv }
-            ?.toMutableList()
+        dao.deleteByMssv(mssv)
+        loadStudents()
     }
 }
